@@ -1,8 +1,6 @@
 package ru.mail.polis;
 
-import java.util.Comparator;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
 //TODO: write code here
 public class AVLTree<E extends Comparable<E>> implements ISortedSet<E> {
@@ -34,45 +32,42 @@ public class AVLTree<E extends Comparable<E>> implements ISortedSet<E> {
 
     @Override
     public E first() {
-
-        if (root == null)
-            return null;
-
-        Node p = root;
-        while (p.left != null) {
-            p = p.left;
+        if (isEmpty()) {
+            throw new NoSuchElementException("set is empty");
         }
-
-        return p.value;
+        Node curr = root;
+        while(curr.left != null){
+            curr = curr.left;
+        }
+        return curr.value;
     }
 
     @Override
     public E last() {
-
-        if (root == null)
-            return null;
-
-        Node p = root;
-        while (p.right != null) {
-            p = p.right;
+        if (isEmpty()) {
+            throw new NoSuchElementException("set is empty");
         }
-
-        return p.value;
+        Node curr = root;
+        while(curr.right != null){
+            curr = curr.right;
+        }
+        return curr.value;
     }
 
     @Override
     public List<E> inorderTraverse() {
-        List<E> list = new LinkedList<E>();
-        addToList(list, root);
+        List<E> list = new ArrayList<>(size);
+        inorderTraverse(root, list);
         return list;
     }
 
-    private void addToList(List<E> list, Node node){
-        if (node.left != null)
-            addToList(list, node.left);
-        list.add(node.value);
-        if (node.right != null)
-            addToList(list, node.right);
+    private void inorderTraverse(Node curr, List<E> list) {
+        if (curr == null) {
+            return;
+        }
+        inorderTraverse(curr.left, list);
+        list.add(curr.value);
+        inorderTraverse(curr.right, list);
     }
 
     @Override
@@ -82,206 +77,189 @@ public class AVLTree<E extends Comparable<E>> implements ISortedSet<E> {
 
     @Override
     public boolean isEmpty() {
-        return size == 0;
+        return root == null;
     }
 
     @Override
     public boolean contains(E value) {
-        Node p = root;
-
-        while (p != null) {
-            if (p.value.compareTo(value) == 0)
-                return true;
-            else if (p.value.compareTo(value) < 0) {
-                p = p.left;
-            } else
-                p = p.right;
+        if (value == null) {
+            throw new NullPointerException("value is null");
         }
-
+        if (root != null) {
+            Node curr = root;
+            while (curr != null) {
+                int cmp = compare(curr.value, value);
+                if (cmp == 0)
+                    return true;
+                else if (cmp < 0)
+                    curr = curr.right;
+                else
+                    curr = curr.left;
+            }
+        }
         return false;
     }
 
     @Override
     public boolean add(E value) {
-        root = add(root, value, null);
+        if (root == null)
+            root = new Node(value, null);
+        else {
+            Node n = root;
+            Node father;
+            while (true) {
+                int cmp = compare(n.value, value);
+                if (cmp == 0)
+                    return false;
+
+                father = n;
+
+                boolean goLeft = cmp > 0;
+                n = goLeft ? n.left : n.right;
+
+                if (n == null) {
+                    if (goLeft) {
+                        father.left = new Node(value, father);
+                    } else {
+                        father.right = new Node(value, father);
+                    }
+                    rebalance(father);
+                    break;
+                }
+            }
+        }
         size++;
         return true;
     }
 
-    private Node add(Node node, E value, Node father) {
-        if (node == null) {
-            Node newnode = new Node(value, father);
-            return newnode;
+    private int height(Node n) {
+        if (n == null)
+            return -1;
+        return 1 + Math.max(height(n.left), height(n.right));
+    }
+
+    private void setBalance(Node... nodes){
+        for (Node n : nodes) {
+            n.balance = height(n.right) - height(n.left);
         }
-        int compareResult = value.compareTo(node.value);
-        if (compareResult > 0) {
-            node.right = add(node.right, value, node);
-            node.height = height(node.left, node.right) + 1;
-        } else if (compareResult < 0) {
-            node.left = add(node.left, value, node);
-            node.height = height(node.left, node.right) + 1;
+    }
+
+    private Node rotateLeft(Node a){
+        Node b = a.right;
+        b.father = a.father;
+        a.right = b.left;
+        if (a.right != null) {
+            a.right.father = a;
+        }
+        b.left = a;
+        a.father = b;
+        if (b.father != null) {
+            if (b.father.right == a) {
+                b.father.right = b;
+            } else {
+                b.father.left = b;
+            }
+        }
+        setBalance(a, b);
+        return b;
+    }
+
+    private Node rotateRight(Node a) {
+
+        Node b = a.left;
+        b.father = a.father;
+
+        a.left = b.right;
+
+        if (a.left != null)
+            a.left.father = a;
+
+        b.right = a;
+        a.father = b;
+
+        if (b.father != null) {
+            if (b.father.right == a) {
+                b.father.right = b;
+            } else {
+                b.father.left = b;
+            }
+        }
+
+        setBalance(a, b);
+
+        return b;
+    }
+
+    private Node rotateLeftThenRight(Node n) {
+        n.left = rotateLeft(n.left);
+        return rotateRight(n);
+    }
+
+    private Node rotateRightThenLeft(Node n) {
+        n.right = rotateRight(n.right);
+        return rotateLeft(n);
+    }
+
+    private void rebalance(Node n) {
+        setBalance(n);
+
+        if (n.balance == -2) {
+            if (height(n.left.left) >= height(n.left.right))
+                n = rotateRight(n);
+            else
+                n = rotateLeftThenRight(n);
+
+        } else if (n.balance == 2) {
+            if (height(n.right.right) >= height(n.right.left))
+                n = rotateLeft(n);
+            else
+                n = rotateRightThenLeft(n);
+        }
+
+        if (n.father != null) {
+            rebalance(n.father);
         } else {
-            node.value = value;
+            root = n;
         }
-        node.balance = balance(node.left, node.right);
-        if (node.balance == -2) {
-            node = leftRotation(node);
-        } else if (node.balance == 2) {
-            node = rightRotation(node);
-        }
-        return node;
-    }
-
-    private int height(Node x, Node y) {
-        if (x == null && y == null)
-            return 0;
-        else if (x == null)
-            return y.height;
-        else if (y == null)
-            return x.height;
-        else
-            return Math.max(x.height, y.height);
-    }
-
-    private int balance(Node x, Node y) {
-        if (x == null && y == null)
-            return 0;
-        else if (x == null)
-            return -y.height;
-        else if (y == null)
-            return x.height;
-        else
-            return x.height - y.height;
-    }
-
-    private Node leftRotation(Node node) {
-        if (node.right.right == null && node.right.left != null) {
-
-            node.right = rightRotation(node.right);
-            node = leftRotation(node);
-
-        } else if (node.right.left == null || node.right.left.height <= node.right.right.height) {
-
-            Node newNode = node.right;
-            newNode.father = node.father;
-            node.right = newNode.left;
-
-            if (node.right != null)
-                node.right.father = node;
-
-            node.height = height(node.left, node.right) + 1;
-            node.father = newNode;
-            node.balance = balance(node.left, node.right);
-            newNode.left = node;
-            node = newNode;
-            node.balance = balance(node.left, node.right);
-            node.height = height(node.left, node.right) + 1;
-
-        } else {
-            node.right = rightRotation(node.right);
-            node = leftRotation(node);
-        }
-        return node;
-    }
-
-    private Node rightRotation(Node node) {
-        if (node.left.right != null && node.left.left == null) {
-
-            node.left = leftRotation(node.left);
-            node = rightRotation(node);
-
-        } else if (node.left.right == null || node.left.right.height <= node.left.left.height) {
-
-            Node newNode = node.left;
-            newNode.father = node.father;
-            node.left = newNode.right;
-
-            if (node.left != null)
-                node.left.father = node;
-
-            node.height = height(node.left, node.right) + 1;
-            node.father = newNode;
-            node.balance = balance(node.left, node.right);
-            newNode.right = node;
-            node = newNode;
-            node.balance = balance(node.left, node.right);
-            node.height = height(node.left, node.right) + 1;
-
-        } else {
-            node.left = leftRotation(node.left);
-            node = rightRotation(node);
-        }
-        return node;
     }
 
     @Override
     public boolean remove(E value) {
-        root = remove(root, value);
-        return true;
-    }
+        if (root == null)
+            return false;
+        Node n = root;
+        Node father = root;
+        Node delNode = null;
+        Node child = root;
 
-    private Node remove(Node node, E value) {
+        while (child != null) {
+            father = n;
+            n = child;
+            int cmp = compare(value, n.value);
+            child = cmp >= 0 ? n.right : n.left;
+            if (cmp == 0)
+                delNode = n;
+        }
 
-        if (node == null)
-            return null;
+        if (delNode != null) {
+            delNode.value = n.value;
 
-        int compareResult = value.compareTo(node.value);
-        if (compareResult > 0) {
+            child = n.left != null ? n.left : n.right;
 
-            node.right = remove(node.right, value);
-
-        } else if (compareResult < 0) {
-
-            node.left = remove(node.left, value);
-
-        } else {
-
-            if (node.right == null && node.left == null) {
-                node = null;
-
-            } else if (node.right == null) {
-                node.left.father = node.father;
-                node = node.left;
-
-            } else if (node.left == null) {
-                node.right.father = node.father;
-                node = node.right;
-
+            if (compare(root.value, value) == 0) {
+                root = child;
             } else {
-                if (node.right.left == null) {
-                    node.right.left = node.left;
-                    node.right.father = node.father;
-                    node.right.father = node.father;
-                    node.left.father = node.right;
-                    node = node.right;
-
+                if (father.left == n) {
+                    father.left = child;
                 } else {
-                    Node res = min(node.right);
-                    node.value = res.value;
-                    remove(node.right, node.value);
+                    father.right = child;
                 }
+                rebalance(father);
             }
             size--;
+            return true;
         }
-        if (node != null) {
-            node.height = height(node.left, node.right) + 1;
-            node.balance = balance(node.left, node.right);
-
-            if (node.balance == -2) {
-                node = leftRotation(node);
-
-            } else if (node.balance == 2) {
-                node = rightRotation(node);
-            }
-        }
-        return node;
-    }
-
-    private Node min(Node node) {
-        if (node.left == null)
-            return node;
-
-        return min(node.left);
+        return false;
     }
 
     private int compare(E v1, E v2) {
